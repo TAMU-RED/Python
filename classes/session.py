@@ -8,7 +8,8 @@ for the following:
         [sensor_1, sensor_2, None, sensor_3]
         where None represents an empty port
     Conversions: each sensor will have a corresponding conversion function:
-        [conversion_1, conversion_2, None, conversion_3]
+        data = sensor_1.convert(raw_data)
+        (see Sensor class for more info)
     Check Thresholds / Trigger Shutdown: On each cycle this class will check for
         sensors outside their acceptable values and keep track of how long (in ms)
         they are outside this range. If this time is larger than the acceptable
