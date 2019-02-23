@@ -35,7 +35,7 @@ CONSIDERATIONS:
 """
 import numpy as np
 import json
-from datetime import datetime
+from time import time
 
 class Session:
     def __init__(self, name, ports, log_dir, log_interval, buffer_length):
@@ -63,7 +63,7 @@ class Session:
     # Begin session
     def start(self):
         # TODO: Check for existing log_dir / create directory
-        self.clock = datetime.now()
+        self.clock = time()
 
     # TODO: End session
 
@@ -85,10 +85,8 @@ class Session:
         # TODO: Parse Arduino output
         #       Should return np.array([123, 345, ...]) in same order as self.ports
         #       Save as variable data
-        # Get time since last reading
-        time_diff = datetime.now() - self.clock
-        # Convert to milliseconds
-        cycle_time = time_diff.seconds * 1000 + time_diff.microseconds // 1000
+        # Get time since last reading (in ms)
+        cycle_time = (time() - self.clock) * 1000
         # Append to times
         self.times.append(self.times[self.cycle_number] + cycle_time)
         # Update cycle number
@@ -116,7 +114,7 @@ class Session:
                 # Move to next item in data
                 i += 1
         # Reset clock
-        self.clock = datetime.now()
+        self.clock = time()
 
     # Get data going back (cycle_number - last_cycle) cycles (to be sent to GUI)
     # Returns JSON of form:
