@@ -64,6 +64,8 @@ class Session:
         # TODO: Check for existing log_dir / create directory
         self.clock = datetime.now()
 
+    # TODO: End session
+
     # Attach a sensor to a specified port
     def attach(self, sensor, port):
         # Check if port is in use
@@ -75,6 +77,13 @@ class Session:
 
     # Complete a cycle of data collection
     def cycle(self):
+        # Init empty cycle list
+        cycle_data = [None] * len(self.ports)
+        # TODO: Create collection function to communicate with Arduino.
+        #       Should return string of form "123,345,..."
+        # TODO: Parse Arduino output
+        #       Should return np.array([123, 345, ...]) in same order as self.ports
+        #       Save as variable data
         # Get time since last reading
         time_diff = datetime.now() - self.clock
         # Convert to milliseconds
@@ -83,13 +92,6 @@ class Session:
         self.times.append(self.times[self.cycle_number] + cycle_time)
         # Update cycle number
         self.cycle_number += 1
-        # Init empty cycle list
-        cycle_data = [None] * len(self.ports)
-        # TODO: Create collection function to communicate with Arduino.
-        #       Should return string of form "123,345,..."
-        # TODO: Parse Arduino output
-        #       Should return np.array([123, 345, ...]) in same order as self.ports
-        #       Save as variable data
         # Init iterator to track sensors and skip empty ports
         i = 0
         # Loop thru sensors
