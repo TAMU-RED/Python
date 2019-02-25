@@ -35,7 +35,7 @@ class Sensor:
         # '(x - 32) * (5 / 9)'
         # Converted to lambda function
         # If no conversion given, returns raw data
-        self.convert = sp.lambdify('x', parse_expr(coversion)) if conversion else lambda x: x
+        self.convert = sp.lambdify('x', parse_expr(conversion)) if conversion else lambda x: x
         # String representation of units, i.e. 'Pa' or 'K'
         # TODO: Create acceptable list and check against it so that we can
         #       use generic conversion functions as needed

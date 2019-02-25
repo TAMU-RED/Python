@@ -36,6 +36,7 @@ CONSIDERATIONS:
 import numpy as np
 import json
 from time import time
+import serial
 
 class Session:
     def __init__(self, name, ports, log_dir, log_interval, buffer_length):
@@ -55,16 +56,24 @@ class Session:
         # Number of cycles to hold in buffer
         self.buffer_length = buffer_length
         # TODO: Initialize buffer (circular?)
+        self.buffer = [None]*self.buffer_length
         # Init cycle_number
         self.cycle_number = 0
         # Init times list
         self.times = [0]
+        # TODO: Use board class
+        self.board = serial.Serial('COM11', 9600)
 
     # Begin session
     def start(self):
+        connected = False
+        # TODO: Send confirmation signal
+        # while not connected:
+        #     serial_in = self.board.readline()
+        #     break
         # TODO: Check for existing log_dir / create directory
         self.clock = time()
-
+        print('Started')
     # TODO: End session
 
     # Attach a sensor to a specified port
@@ -77,14 +86,42 @@ class Session:
         # TODO: create or lookup conversion function
 
     # Complete a cycle of data collection
-    def cycle(self):
+    def cycle(self, first_run=False):
+        if first_run:
+            c = self.board.read().decode('utf-8', 'ignore')
+            while c != '?':
+                c = self.board.read().decode('utf-8', 'ignore')
+            return
         # Init empty cycle list
         cycle_data = [None] * len(self.ports)
         # TODO: Create collection function to communicate with Arduino.
         #       Should return string of form "123,345,..."
-        # TODO: Parse Arduino output
-        #       Should return np.array([123, 345, ...]) in same order as self.ports
-        #       Save as variable data
+        data_string = ''
+        c = self.board.read().decode('utf-8', 'ignore')
+        while c != '?':
+            data_string += c
+            c = self.board.read().decode('utf-8', 'ignore')
+        # Should return np.array([ [123, 345], ...]) in same order as self.ports
+        data = np.array([None]*len(self.ports))
+        for port_data in data_string.split(';'):
+            # Get port number
+            temp_port = port_data.split(':')[0]
+            if len(temp_port) == 0:
+                continue
+            else:
+                temp_port = int(temp_port)
+            try:
+                port_index = self.ports.index(temp_port)
+            except ValueError as e:
+                print(e)
+                continue
+            temp_data = port_data.split(':')[1]
+            try:
+                data[port_index] = np.array([float(x) for x in temp_data.split(',')])
+            except ValueError as e:
+                print('INVALID!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                data[port_index] = np.array([None])
+        print(data)
         # Get time since last reading (in ms)
         cycle_time = (time() - self.clock) * 1000
         # Append to times
@@ -101,18 +138,19 @@ class Session:
             if sensor:
                 # Check threshold
                 # NOTE: When should we reset times?
-                if data[i] - sensor.precision * data[i] < sensor.threshold[0]:
-                    self.threshold_times[port][0] += cycle_time
-                elif data[i] + sensor.precision * data[i] > sensor.threshold[1]:
-                    self.threshold_times[port][1] += cycle_time
+                # if data[i] - sensor.precision * data[i] < sensor.threshold[0]:
+                #     self.threshold_times[port][0] += cycle_time
+                # elif data[i] + sensor.precision * data[i] > sensor.threshold[1]:
+                #     self.threshold_times[port][1] += cycle_time
                 # TODO: check for shutdown
                 # Get data from parsed Arduino output
                 # NOTE: Should we convert here or later?
-                cycle_data[port] = sensor.convert(data[i])
-                # TODO: Add to buffer
+                # cycle_data[port] = sensor.convert(data[i])
                 # TODO: If self.cycle_number % self.log_interval write to log
                 # Move to next item in data
                 i += 1
+        # TODO: Add to buffer
+        self.buffer[self.cycle_number] = cycle_data
         # Reset clock
         self.clock = time()
 
