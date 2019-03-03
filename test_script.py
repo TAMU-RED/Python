@@ -8,10 +8,11 @@ accelerometer = Sensor(**accelerometer)
 # Init test session
 sess = Session(**session)
 
-# Start session
-sess.start()
 # Attach sensors
 sess.attach(accelerometer, 0)
+
+# Start session
+sess.start()
 
 # Read data
 i = 0
