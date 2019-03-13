@@ -13,7 +13,7 @@ import h5py
 import json
 
 class Client:
-    def __init__(self, sensors, ip, port, log_dir, log_file, log_interval, log_size=10e3):
+    def __init__(self, sensors, ip, port, log_dir, log_file, log_size=10e3):
         # List of sensors from session (instance of Sensor class)
         self.sensors = sensors
         # IP Address of RPi
@@ -24,8 +24,6 @@ class Client:
         self.log_dir = log_dir
         # Name of log file
         self.log_file = log_file
-        # Frequency of logging in cycles
-        self.log_interval = log_interval
         # Resize interval / initial length of log file (per sensor + times)
         # Default: 1 kB per sensor
         self.log_size = log_size
@@ -47,6 +45,7 @@ class Client:
                 json_data = await websocket.recv()
                 print('Received data...')
                 data = json.JSONDecoder().decode(json_data)
+                print(data)
                 if data['action'] == 'LOG_UPDATE':
                     self.log_data(data)
 
@@ -159,32 +158,3 @@ class Client:
                             dset.resize(new_size)
                         # Write data
                         dset[start_index:end_index] = sub_data
-
-    # FROM SESSION CLASS
-    def log_data_(self):
-        indices = self.get_last_n_indices(self.log_interval)
-        with h5py.File(self.log_dir + '/' + self.log_file, 'a') as f:
-            should_resize = False
-            try:
-                f['times']['t'][indices[0]:indices[-1]+1] = self.times[indices]
-            except TypeError as e:
-                # Add to resize counter
-                self.num_log_resizes += 1
-                # TODO: Grab actual error
-                new_size = (self.log_size * self.num_log_resizes)
-                f['times']['t'].resize()
-                should_resize = True
-            for port_index, sensor in enumerate(self.sensors):
-                # Transpose so that sub sensors are rows
-                port_data = self.buffer[port_index][indices].T
-                for i, sub_sensor in enumerate(sensor.sub_sensors):
-                    dset = f[sensor.name][sub_sensor]['data']
-                    if should_resize:
-                        dset.resize(new_size)
-                    # Get mean to replace None values
-                    try:
-                        mean = port_data[i][port_data[i] != None].mean()
-                    except ZeroDivisionError:
-                        mean = 0
-                        print('Log Cycle Error: No data collected')
-                    dset[self.cycle_number-self.log_interval:self.cycle_number] = np.array([d if d else mean for d in port_data[i]])

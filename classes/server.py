@@ -66,7 +66,8 @@ class Server:
     # Handle client requests
     async def request_handler(self, websocket):
         # Get requests
-        async for request in websocket:
+        while True:
+            message = await websocket.recv()
             # Split request
             action, payload = request.split('::')
             # Event handler
