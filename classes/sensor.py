@@ -35,6 +35,8 @@ class Sensor:
         self.thresholds = thresholds
         # Number of ms above/below threshold should trigger shutdown [below, above]
         self.shutdown_times = shutdown_times
+        # Save string conversions for self.get_info()
+        self.conversion_strings = conversions
         # Conversion function given in string form with x as variable as such:
         # '(x - 32) * (5 / 9)'
         # Converted to lambda function
@@ -53,3 +55,19 @@ class Sensor:
     # Convert data (i = index of data)
     def convert(self, x, i):
         return self.conversions[i](x)
+
+    def get_info(self):
+        info = {
+            'name': self.name,
+            'sub_sensors': self.sub_sensors,
+            'model': self.model,
+            'ranges': self.ranges,
+            'precisions': self.precisions,
+            'thresholds': self.thresholds,
+            'shutdown_times': self.shutdown_times,
+            'conversions': self.conversion_strings,
+            'units': self.units,
+            'documentation': self.documentation,
+            'position': self.position
+        }
+        return info

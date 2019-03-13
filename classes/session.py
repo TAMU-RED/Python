@@ -41,7 +41,7 @@ from time import time
 import serial
 
 class Session:
-    def __init__(self, name, ports, log_dir, log_interval, buffer_length, com_port, log_size=10e3):
+    def __init__(self, name, ports, log_dir, log_interval, buffer_length, com_port, log_size=10e3, log_file=None):
         # TODO: Hash ID
         # Name of session
         self.name = name
@@ -55,6 +55,8 @@ class Session:
         self.threshold_times = np.array([None]*len(ports))
         # Name of log directory
         self.log_dir = log_dir
+        # Name of log file
+        self.log_file = log_file
         # Frequency of logging in cycles
         self.log_interval = log_interval
         # Resize interval / initial length of log file (per sensor + times)
@@ -64,6 +66,8 @@ class Session:
         # Number of cycles to hold in buffer
         self.buffer_length = buffer_length
         # Init empty buffer
+        # Buffer of form: [ [port data], [port data], ...]
+        #   where port data of form: [ [sensor 1 data], ... ]
         self.buffer = np.array([None]*len(ports))
         # Cursor for circular buffer
         # NOTE: Points to NEXT index of buffer such that
@@ -72,6 +76,7 @@ class Session:
         # Init cycle_number
         self.cycle_number = 0
         # Init trial number
+        # TODO: Use for multiple log files
         self.trial = 0
         # Init times list
         self.times = np.zeros(self.buffer_length)
@@ -87,7 +92,6 @@ class Session:
         #     break
         # TODO: Check for existing log_dir / create directory
         self.trial += 1
-        self.init_log()
         self.clock = time()
         print('Started')
     # TODO: End session
@@ -125,6 +129,8 @@ class Session:
         data = np.array([None]*len(self.ports))
         # Get time since last reading (in ms)
         cycle_time = (time() - self.clock) * 1000
+        # Reset clock
+        self.clock = time()
         # Loop through data
         for port_data in data_string.split(';'):
             # Parse data
@@ -147,27 +153,36 @@ class Session:
                 print('Conversion Error:', conversion_error[1])
                 # TODO: Possibly replace value
             # Add to data buffer
-            print(converted_data)
             self.buffer[port_index][self.cursor] = converted_data
-        print('Current:')
-        print(self.buffer[0][self.cursor])
-        print('')
-        print('Last 5:')
-        print(self.get_last_n_indices(5))
-        print(self.buffer[0][self.get_last_n_indices(5)])
-        print('')
+        # Get return data
+        curr_data = [d[self.cursor] for d in self.buffer]
         # Append to times
         self.times[self.cursor] = self.times[self.cursor-1] + cycle_time
-        # Add data to log file
-        if self.cycle_number % self.log_interval == 0:
+        # Log flag
+        should_log = False
+        # Check log interval
+        if self.cycle_number > 0 and self.cycle_number % self.log_interval == 0:
             print('Logging...')
-            self.log_data()
+            should_log = True
         # Update cycle number
         self.cycle_number += 1
         # Update buffer cursor
         self.cursor = self.cycle_number % self.buffer_length
-        # Reset clock
-        self.clock = time()
+        # Return data, time
+        return curr_data, cycle_time, should_log
+
+    # Iterator for looping thru cycles
+    def __iter__(self):
+        while True:
+            # Check if first cycle
+            if self.cycle_number == 0:
+                # Run first cycle to sync to Arduino
+                self.cycle(first_run=True)
+                # Go to next iteration
+                self.cycle_number += 1
+                continue
+            # Execute next cycle
+            yield self.cycle()
 
     # Get data from Arduino
     def read_serial(self):
@@ -194,7 +209,15 @@ class Session:
             return (error, None), None, None
         else:
             # string -> integer
-            port_number = int(port_number)
+            try:
+                port_number = int(port_number)
+            # Error parsing port number
+            # TODO: Possible recovery of data
+            except ValueError:
+                error = True
+                e = 'Error parsing port number'
+                print(e)
+                return (error, e), None, None
         try:
             # Get index of port
             port_index = self.ports.index(port_number)
@@ -230,6 +253,11 @@ class Session:
                 # Above max
                 elif converted_data[i] + sensor.precisions[i] * converted_data[i] > threshold[1]:
                      self.threshold_times[port_index][i][1] += cycle_time
+                     print('Threshold Warning')
+                     print('%s, %s: %d' \
+                            % (self.sensors[port_index].name,
+                               self.sub_sensors[port_index][i],
+                               self.threshold_times[port_index][i][1]))
             # TODO: check for shutdown
         except ValueError as e:
             # TODO: Maybe repeat previous value?
@@ -238,83 +266,51 @@ class Session:
             return (error, e), converted_data, shutdown
         return (error, None), converted_data, shutdown
 
-    # Initialize log file
-    def init_log(self):
-        # Try to create log directory
-        try:
-            os.makedirs(self.log_dir)
-        # TODO: Better error handling
-        except OSError:
-            print('Creation of log directory %s failed' % self.log_dir)
-        else:
-            print('Created log directory %s' % self.log_dir)
-        # Create .hdf5 file
-        filename = 'trial_' + str(self.trial) + '.hdf5'
-        self.filename = filename
-        try:
-            with h5py.File(self.log_dir + '/' + filename, 'x') as f:
-                # Create main groups
-                times = f.create_group('times')
-                times.create_dataset('t', (self.log_size,), maxshape=(None,))
-                # NOTE: port is index of port
-                # Loop thru sensors and create groups / sub-groups
-                # TODO: More than just data, i.e. thresholds
-                for port, sensor in enumerate(self.sensors):
-                    if sensor:
-                        group = f.create_group(sensor.name)
-                        for i, sub_sensor in enumerate(sensor.sub_sensors):
-                            sub_group =group.create_group(sub_sensor)
-                            sub_group.create_dataset('data', (self.log_size,), maxshape=(None,))
-        # TODO: Send error to GUI
-        # File exists
-        except OSError:
-            print('Trying to overwrite file %s in directory %s' % (filename, self.log_dir))
-
-
-    # Log data to log file
-    def log_data(self):
-        indices = self.get_last_n_indices(self.log_interval)
-        with h5py.File(self.log_dir + '/' + self.filename, 'a') as f:
-            should_resize = False
-            try:
-                f['times']['t'][indices[0]:indices[-1]+1] = self.times[indices]
-            except TypeError as e:
-                # Add to resize counter
-                self.num_log_resizes += 1
-                # TODO: Grab actual error
-                new_size = (self.log_size * self.num_log_resizes)
-                f['times']['t'].resize()
-                should_resize = True
-            for port_index, sensor in enumerate(self.sensors):
-                # Transpose so that sub sensors are rows
-                port_data = self.buffer[port_index][indices].T
-                for i, sub_sensor in enumerate(sensor.sub_sensors):
-                    dset = f[sensor.name][sub_sensor]['data']
-                    if should_resize:
-                        dset.resize(new_size)
-                    # TODO: Replace None entries
-                    dset[self.cycle_number-self.log_interval:self.cycle_number] = np.array([d if d else 0 for d in port_data[i]])
+    # Get log data
+    # Returns data for logging
+    def get_log_data(self, indices=None, return_json=False):
+        # Get cycle number
+        cycle_number = self.cycle_number
+        # Get indices for buffer if not given
+        if not indices:
+            indices = self.get_last_n_indices(self.log_interval)
+        # Init data dict
+        dset = {}
+        # Get cycle times
+        dset['times']['t'] = self.times[indices]
+        # Get data from buffer
+        for port_index, sensor in enumerate(self.sensors):
+            dset[sensor.name] = {}
+            # Transpose so that sub sensors are rows
+            port_data = self.buffer[port_index][indices].T
+            for i, sub_sensor in enumerate(sensor.sub_sensors):
+                # Get mean to replace None values
+                try:
+                    mean = port_data[i][port_data[i] != None].mean()
+                except ZeroDivisionError:
+                    mean = 0
+                    print('Log Cycle Error: No data collected')
+                dset[sensor.name][sub_sensor] = np.array([d if d else mean for d in port_data[i]])
+        if return_json:
+            return json.JSONEncoder.encode(dset), cycle_number
+        return dset, cycle_number
 
     # Get data going back (cycle_number - last_cycle) cycles (to be sent to GUI)
     # Returns JSON of form:
-    #   {"sensor_1": {"data": [123, 456, 788], "units": "Pa"},..., "times": [1024, 1037,...]}
+    #   {"times": [100, 200, ...], "sensor_1": {"sub_sensor": {"data": [data...]} }, ...}
     def get_gui_data(self, last_cycle):
         # Get current cycle
         current_cycle = self.cycle_number
         # Determine how far to go back
         num_cycles = current_cycle - last_cycle
-        # Create dict
-        data_dict = {}
-        # Get data from buffer
+        # Get indices for buffer
         indices = self.get_last_n_indices(num_cycles)
-        # NOTE: port is an index corresponding to self.ports, not the actual
-        #       port number
-        for port, sensor in enumerate(self.sensors):
-            data_dict[sensor.name] = {'data': self.buffer[port][indices]}
-            data_dict['times'] = self.times[indices]
-        # Encode and return JSON data and most recent cycle_number
+        # Get data (in same form as log data)
+        dset, _ = self.get_log_data(indices)
         # NOTE: current_cycle will become last_cycle on next call from GUI
-        return json.JSONEncoder().encode(data_dict), current_cycle
+        dset['current_cycle'] = current_cycle
+        dset['action'] = 'GUI_UPDATE'
+        return json.JSONEncoder.encode(dset)
 
     # TODO: initiate shutdown sequence
     # Possibly set shutdown pin to HIGH
