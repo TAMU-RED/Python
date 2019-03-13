@@ -22,7 +22,7 @@ class Server:
     # Start server
     def start(self):
         asyncio.get_event_loop().run_until_complete(
-            websockets.serve(self.main, 'localhost', self.port)
+            websockets.serve(self.main, '127.0.0.1', self.port)
         )
         asyncio.get_event_loop().run_forever()
 

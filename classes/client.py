@@ -45,7 +45,6 @@ class Client:
                 json_data = await websocket.recv()
                 print('Received data...')
                 data = json.JSONDecoder().decode(json_data)
-                print(data)
                 if data['action'] == 'LOG_UPDATE':
                     self.log_data(data)
 
