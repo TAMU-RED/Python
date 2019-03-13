@@ -133,7 +133,6 @@ class Session:
         self.clock = time()
         # Loop through data
         for port_data in data_string.split(';'):
-            print(port_data)
             # Parse data
             parse_error, port_index, temp_data = self.parse_serial(port_data)
             # Data not read
@@ -159,7 +158,6 @@ class Session:
         curr_data = [d[self.cursor] for d in self.buffer]
         # Append to times
         self.times[self.cursor] = self.times[self.cursor-1] + cycle_time
-        print(self.times[self.cursor], cycle_time)
         # Log flag
         should_log = False
         # Check log interval
