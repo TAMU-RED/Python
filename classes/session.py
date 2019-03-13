@@ -82,6 +82,8 @@ class Session:
         self.times = np.zeros(self.buffer_length)
         # TODO: Use board class
         self.board = serial.Serial(com_port, 9600)
+        # To avoid reset on new client connection
+        self.is_running = False
 
     # Begin session
     def start(self):
@@ -162,7 +164,6 @@ class Session:
         should_log = False
         # Check log interval
         if self.cycle_number > 0 and self.cycle_number % self.log_interval == 0:
-            print('Logging...')
             should_log = True
         # Update cycle number
         self.cycle_number += 1
@@ -253,11 +254,11 @@ class Session:
                 # Above max
                 elif converted_data[i] + sensor.precisions[i] * converted_data[i] > threshold[1]:
                      self.threshold_times[port_index][i][1] += cycle_time
-                     print('Threshold Warning')
-                     print('%s, %s: %d' \
-                            % (self.sensors[port_index].name,
-                               self.sub_sensors[port_index][i],
-                               self.threshold_times[port_index][i][1]))
+                     # print('Threshold Warning')
+                     # print('%s, %s: %d' \
+                     #        % (self.sensors[port_index].name,
+                     #           self.sub_sensors[port_index][i],
+                     #           self.threshold_times[port_index][i][1]))
             # TODO: check for shutdown
         except ValueError as e:
             # TODO: Maybe repeat previous value?
@@ -276,8 +277,9 @@ class Session:
             indices = self.get_last_n_indices(self.log_interval)
         # Init data dict
         dset = {}
+        dset['times'] = {}
         # Get cycle times
-        dset['times']['t'] = self.times[indices]
+        dset['times']['t'] = self.times[indices].tolist()
         # Get data from buffer
         for port_index, sensor in enumerate(self.sensors):
             dset[sensor.name] = {}
@@ -290,9 +292,9 @@ class Session:
                 except ZeroDivisionError:
                     mean = 0
                     print('Log Cycle Error: No data collected')
-                dset[sensor.name][sub_sensor] = np.array([d if d else mean for d in port_data[i]])
+                dset[sensor.name][sub_sensor] = [d if d else mean for d in port_data[i]]
         if return_json:
-            return json.JSONEncoder.encode(dset), cycle_number
+            return json.JSONEncoder().encode(dset), cycle_number
         return dset, cycle_number
 
     # Get data going back (cycle_number - last_cycle) cycles (to be sent to GUI)
@@ -310,7 +312,7 @@ class Session:
         # NOTE: current_cycle will become last_cycle on next call from GUI
         dset['current_cycle'] = current_cycle
         dset['action'] = 'GUI_UPDATE'
-        return json.JSONEncoder.encode(dset)
+        return json.JSONEncoder().encode(dset)
 
     # TODO: initiate shutdown sequence
     # Possibly set shutdown pin to HIGH

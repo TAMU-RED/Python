@@ -21,7 +21,6 @@ class Server:
 
     # Start server
     def start(self):
-        self.run_session()
         asyncio.get_event_loop().run_until_complete(
             websockets.serve(self.main, 'localhost', self.port)
         )
@@ -31,31 +30,38 @@ class Server:
     async def main(self, websocket, path):
         await self.add_client(websocket)
         try:
-            self.request_handler(websocket)
+            if not self.session.is_running:
+                self.session.is_running = True
+                await self.run_session(websocket)
+                await self.request_handler(websocket)
         finally:
-            self.remove_client(websocket)
+            await self.remove_client(websocket)
 
-    def add_client(self, websocket):
+    async def add_client(self, websocket):
         self.clients.add(websocket)
+        print('Added client')
 
-    def remove_client(self, websocket):
+    async def remove_client(self, websocket):
         self.clients.remove(websocket)
+        print('Client disconnected')
 
     # Run test session
-    def run_session(self):
+    async def run_session(self, websocket):
         # Start session
         self.session.start()
         # Begin cycling
         for data, time, should_log in self.session:
             if should_log:
-                self.send_log_data()
+                await self.send_log_data(websocket)
 
     # Handle sending log data
-    async def send_log_data(self):
+    async def send_log_data(self, websocket):
         dset, _ = self.session.get_log_data()
         dset['action'] = 'LOG_UPDATE'
         if self.clients:
-            asyncio.wait([client.send(json.JSONEncoder.encode(dset)) for client in self.clients])
+            print('Sending data...')
+            await asyncio.wait([client.send(json.JSONEncoder().encode(dset)) for client in self.clients])
+            print('Data sent')
 
     # Handle client requests
     async def request_handler(self, websocket):

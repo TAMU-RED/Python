@@ -10,11 +10,14 @@ import asyncio
 import websockets
 import os
 import h5py
+import json
 
 class Client:
-    def __init__(self, sensors, port, log_dir, log_file, log_interval, log_size=10e3):
+    def __init__(self, sensors, ip, port, log_dir, log_file, log_interval, log_size=10e3):
         # List of sensors from session (instance of Sensor class)
         self.sensors = sensors
+        # IP Address of RPi
+        self.ip = ip
         # Websocket port for RPi
         self.port = port
         # Name of log directory
@@ -37,11 +40,13 @@ class Client:
 
     # Open port and listen
     async def listen(self):
-        async with websockets.connect('ws://localhost:' + str(self.port)) as websocket:
+        async with websockets.connect('ws://' + str(self.ip) + ':' + str(self.port)) as websocket:
+            print('Connected to port %s' % self.port)
             while True:
+                print('Listening...')
                 json_data = await websocket.recv()
                 print('Received data...')
-                data = json.JSONDecoder.decode(json_data)
+                data = json.JSONDecoder().decode(json_data)
                 if data['action'] == 'LOG_UPDATE':
                     self.log_data(data)
 
@@ -63,7 +68,7 @@ class Client:
                 # Prompt for new directory name
                 # TODO: Select from GUI
                 add_to_existing_dir = input('Add logs to existing directory %s? [y/n] ' % dir_name)
-                if add_to_existing_dir.lower()[0] == 'y':
+                if add_to_existing_dir and add_to_existing_dir.lower()[0] == 'y':
                     print('Adding log to directory %s' % dir_name)
                     break
                 dir_name = input('New directory name: ')
@@ -97,7 +102,7 @@ class Client:
                     for port, sensor in enumerate(self.sensors):
                         if sensor:
                             group = f.create_group(sensor.name)
-                            for i, sub_sensor in enumerate(sensor.sub_sensors):
+                            for sub_sensor in sensor.sub_sensors:
                                 sub_group = group.create_group(sub_sensor)
                                 sub_group.create_dataset('data', (self.log_size,), maxshape=(None,))
             # TODO: Send error to GUI
@@ -106,9 +111,9 @@ class Client:
             except OSError:
                 print('File %s already exists in directory %s' % (filename, self.log_dir))
                 should_overwrite = input('Overwrite log file? [y/n] ')
-                if should_overwrite.lower()[0] == 'y':
+                if should_overwrite and should_overwrite.lower()[0] == 'y':
                     confirm_overwrite = input('Are you sure? All previous data will be lost [y/n] ')
-                    if confirm_overwrite:
+                    if confirm_overwrite and confirm_overwrite.lower()[0] == 'y':
                         print('Overwriting data in log file %s' % filename)
                         self.log_file = filename
                         # Overwrite old file
@@ -126,9 +131,11 @@ class Client:
         # Write to hdf5 file
         with h5py.File(self.log_dir + '/' + self.log_file, 'a') as f:
             should_resize = False
+            start_index = len(f['times']['t'][:])
+            end_index = start_index + len(dataset['times']['t'])
             # Try writing to file (to check if full)
             try:
-                f['times']['t'][indices[0]:indices[-1]+1] = self.times[indices]
+                f['times']['t'][start_index:end_index] = dataset['times']['t']
             except TypeError as e:
                 # Add to resize counter
                 self.num_log_resizes += 1
@@ -137,19 +144,21 @@ class Client:
                 new_size = self.log_size * self.num_log_resizes
                 # Resize and write times
                 f['times']['t'].resize(new_size)
-                f['times']['t'][indices[0]:indices[-1]+1] = self.times[indices]
+                f['times']['t'][start_index:end_index] = self.times[indices]
                 # Flag for other dsets
                 should_resize = True
             # Loop thru sensors
             for main_key, sensor_data in dataset.items():
-                # Loop thru each sub sensor
-                for sub_key, sub_data in sensor_data.items():
-                    dset = f[main_key][sub_key]['data']
-                    # Resize if necessary
-                    if should_resize:
-                        dset.resize(new_size)
-                    # Write data
-                    dset[cycle_number-self.log_interval:cycle_number] = sub_data
+                # Ignore non-sensor data
+                if main_key in [s.name for s in self.sensors]:
+                    # Loop thru each sub sensor
+                    for sub_key, sub_data in sensor_data.items():
+                        dset = f[main_key][sub_key]['data']
+                        # Resize if necessary
+                        if should_resize:
+                            dset.resize(new_size)
+                        # Write data
+                        dset[start_index:end_index] = sub_data
 
     # FROM SESSION CLASS
     def log_data_(self):
