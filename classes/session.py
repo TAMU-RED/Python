@@ -75,6 +75,8 @@ class Session:
         self.cursor = 0
         # Init cycle_number
         self.cycle_number = 0
+        # For GUI syncing
+        self.last_update = 0
         # Init trial number
         # TODO: Use for multiple log files
         self.trial = 0
@@ -267,11 +269,11 @@ class Session:
 
     # Get log data
     # Returns data for logging
-    def get_log_data(self, indices=None, return_json=False):
+    def get_log_data(self, indices=[], return_json=False):
         # Get cycle number
         cycle_number = self.cycle_number
         # Get indices for buffer if not given
-        if not indices:
+        if len(indices) == 0:
             indices = self.get_last_n_indices(self.log_interval)
         # Init data dict
         dset = {}
@@ -302,13 +304,17 @@ class Session:
         # Get current cycle
         current_cycle = self.cycle_number
         # Determine how far to go back
-        num_cycles = current_cycle - last_cycle
+        num_cycles = current_cycle - int(last_cycle)
+        if num_cycles < 1:
+            return
         # Get indices for buffer
         indices = self.get_last_n_indices(num_cycles)
+        print(current_cycle, last_cycle)
         # Get data (in same form as log data)
         dset, _ = self.get_log_data(indices)
         # NOTE: current_cycle will become last_cycle on next call from GUI
         dset['current_cycle'] = current_cycle
+        dset['last_update'] = self.last_update
         dset['action'] = 'GUI_UPDATE'
         return json.JSONEncoder().encode(dset)
 

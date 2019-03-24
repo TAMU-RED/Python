@@ -30,11 +30,19 @@ class Server:
     async def main(self, websocket, path):
         await self.add_client(websocket)
         try:
-            if not self.session.is_running:
-                self.session.is_running = True
-                await self.run_session(websocket)
+            while True:
+                if not self.session.is_running:
+                    # Init session
+                    self.session.start()
+                    self.session.is_running = True
+                # Execute next cycle
+                data, time, should_log = next(self.session.__iter__())
+                if should_log:
+                    await self.send_log_data(websocket)
+                # Listen for client requests
                 await self.request_handler(websocket)
         finally:
+            # Disconnect client
             await self.remove_client(websocket)
 
     async def add_client(self, websocket):
@@ -44,15 +52,6 @@ class Server:
     async def remove_client(self, websocket):
         self.clients.remove(websocket)
         print('Client disconnected')
-
-    # Run test session
-    async def run_session(self, websocket):
-        # Start session
-        self.session.start()
-        # Begin cycling
-        for data, time, should_log in self.session:
-            if should_log:
-                await self.send_log_data(websocket)
 
     # Handle sending log data
     async def send_log_data(self, websocket):
@@ -66,10 +65,10 @@ class Server:
     # Handle client requests
     async def request_handler(self, websocket):
         # Get requests
-        while True:
-            message = await websocket.recv()
-            # Split request
-            action, payload = request.split('::')
-            # Event handler
-            if action == 'GET_DATA':
-                websocket.send(self.session.get_gui_data(payload))
+        request = await websocket.recv()
+        # Split request
+        action, payload = request.split('::')
+        # Event handler
+        if action == 'GET_DATA':
+            data = self.session.get_gui_data(payload)
+            await websocket.send(data)
