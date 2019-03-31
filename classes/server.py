@@ -36,15 +36,18 @@ class Server:
         try:
             while True:
                 if not self.session.is_running:
+                    print('Starting Session...')
                     # Init session
                     self.session.start()
                     self.session.is_running = True
                 # Execute next cycle
+                print('Reading Serial...')
+                print('')
                 data, time, should_log = next(self.session.__iter__())
                 if should_log:
                     await self.send_log_data(websocket)
                 # Listen for client requests
-                await self.request_handler(websocket)
+                self.request_handler(websocket)
         finally:
             # Disconnect client
             await self.remove_client(websocket)

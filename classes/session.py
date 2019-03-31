@@ -171,6 +171,7 @@ class Session:
         # Update buffer cursor
         self.cursor = self.cycle_number % self.buffer_length
         print('data:', curr_data)
+        print('')
         # Return data, time
         return curr_data, cycle_time, should_log
 

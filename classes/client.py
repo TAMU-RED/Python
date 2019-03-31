@@ -29,6 +29,8 @@ class Client:
         self.log_size = log_size
         # Counter of resizes
         self.num_log_resizes = 1
+        # Current log_file index
+        self.log_index = 0
         # Initialize log
         self.init_log()
 
@@ -44,8 +46,10 @@ class Client:
                 print('Listening...')
                 json_data = await websocket.recv()
                 print('Received data...')
+                print(json_data)
                 data = json.JSONDecoder().decode(json_data)
                 if data['action'] == 'LOG_UPDATE':
+                    print('Logging data...')
                     self.log_data(data)
 
     # Initialize log file
@@ -129,8 +133,16 @@ class Client:
         # Write to hdf5 file
         with h5py.File(self.log_dir + '/' + self.log_file, 'a') as f:
             should_resize = False
-            start_index = len(f['times']['t'][:])
+            # Get current log position
+            start_index = self.log_index
+            print('Start Index:')
+            print(start_index)
+            # Get end of log index
             end_index = start_index + len(dataset['times']['t'])
+            # Reset log index for next log
+            self.log_index += end_index
+            print('Log Data:')
+            print(dataset)
             # Try writing to file (to check if full)
             try:
                 f['times']['t'][start_index:end_index] = dataset['times']['t']
@@ -152,6 +164,8 @@ class Client:
                     # Loop thru each sub sensor
                     for sub_key, sub_data in sensor_data.items():
                         dset = f[main_key][sub_key]['data']
+                        print('Sub Data:')
+                        print(sub_data)
                         # Resize if necessary
                         if should_resize:
                             dset.resize(new_size)
