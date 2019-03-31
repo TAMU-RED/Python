@@ -183,8 +183,11 @@ class Session:
                 self.cycle(first_run=True)
                 # Go to next iteration
                 self.cycle_number += 1
+                print('Cycle initiated')
                 continue
             # Execute next cycle
+            print('Next Cycle:')
+            print('')
             yield self.cycle()
 
     # Get data from Arduino
