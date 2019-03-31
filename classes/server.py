@@ -39,8 +39,10 @@ class Server:
                     # Init session
                     self.session.start()
                     self.session.is_running = True
+                    print('Session Initiated')
                 # Execute next cycle
                 data, time, should_log = next(self.session.__iter__())
+                print('Next Cycle:')
                 if should_log:
                     await self.send_log_data(websocket)
                 # Listen for client requests
