@@ -129,6 +129,7 @@ class Session:
             return
         # Init empty string
         data_string = self.read_serial()
+        print('data-string:', data_string)
         # Get time since last reading (in ms)
         cycle_time = (time() - self.clock) * 1000
         # Reset clock
@@ -169,6 +170,7 @@ class Session:
         self.cycle_number += 1
         # Update buffer cursor
         self.cursor = self.cycle_number % self.buffer_length
+        print('data:', curr_data)
         # Return data, time
         return curr_data, cycle_time, should_log
 

@@ -21,10 +21,14 @@ class Server:
 
     # Start server
     def start(self):
-        asyncio.get_event_loop().run_until_complete(
-            websockets.serve(self.main, '', self.port)
-        )
-        asyncio.get_event_loop().run_forever()
+       asyncio.get_event_loop().run_until_complete(
+           websockets.serve(self.main, '', self.port)
+       )
+       asyncio.get_event_loop().run_forever()
+#       while True:
+#           self.session.start()
+#           while True:
+#               self.session.cycle()
 
     # Main server function
     async def main(self, websocket, path):
